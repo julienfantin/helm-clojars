@@ -31,9 +31,15 @@
 
 ;;; Commentary:
 ;;
-;; Helm interface to clojars.org
+;; Helm interface to the clojars.org search API.
 ;;
 ;; Usage:
+;;
+;; M-x helm-clojars
+;;
+;; Customization:
+;;
+;; See the `helm-clojars' customize group.
 ;;
 ;;; Code:
 
