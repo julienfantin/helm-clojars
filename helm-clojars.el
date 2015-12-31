@@ -135,9 +135,10 @@
 (defun helm-clojars-format-artifact-leiningen (artifact)
   (let* ((group (cdr (assoc 'group_name artifact)))
          (jar (cdr (assoc 'jar_name artifact)))
-         (version (cdr (assoc 'version artifact)))
-         (s (if group (format "%s/%s" group jar))))
-    (format "[%s \"%s\"]" s version)))
+         (version (cdr (assoc 'version artifact))))
+    (format "[%s \"%s\"]"
+            (if group (format "%s/%s" group jar) jar)
+            version)))
 
 (defun helm-clojars-search-result-read-results ()
   ;; vector -> seq
