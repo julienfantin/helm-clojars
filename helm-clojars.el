@@ -41,8 +41,10 @@
 (require 'helm-net)
 (require 'json)
 (require 'url)
+(eval-when-compile
+  (require 'cl))
 
-;; ---------------------------------------------------------------------
+
 ;; * Customizations
 
 (defgroup helm-clojars nil
@@ -64,8 +66,9 @@
 
 (defcustom helm-clojars-wildcard-search
   t
-  "Turn search terms into wildcard lucene queries, e.g. \"foo bar\" will
-  result in a query for \"foo* bar*\""
+  "Turn search terms into wildcard lucene queries, e.g. \"foo
+  bar\" will result in a query for \"foo* bar*\". This variable
+  has no effect if `helm-clojars-fuzzy-search' is set"
   :group 'helm-clojars
   :type 'boolean)
 
@@ -88,7 +91,37 @@
   :group 'helm-clojars
   :type 'int)
 
-;; ---------------------------------------------------------------------
+(defcustom helm-clojars-group-width
+  30
+  "Maximum group name width"
+  :group 'helm-clojars
+  :type 'int)
+
+(defcustom helm-clojars-jar-width
+  20
+  "Maximum jar name width"
+  :group 'helm-clojars
+  :type 'int)
+
+(defcustom helm-clojars-version-width
+  18
+  "Maximum jar name width"
+  :group 'helm-clojars
+  :type 'int)
+
+(defcustom helm-clojars-candidate-width
+  nil
+  "Maximum candidate width"
+  :group 'helm-clojars
+  :type 'int)
+
+(defcustom helm-clojars-padding-width
+  2
+  "Padding width between columns"
+  :group 'helm-clojars
+  :type 'int)
+
+
 ;; * Search API
 
 (defvar url-http-end-of-headers)
@@ -100,22 +133,40 @@
          (s (if group (format "%s/%s" group jar))))
     (format "[%s \"%s\"]" s version)))
 
-(defun helm-clojars-format-artifact-display (artifact)
-  (let* ((s (helm-clojars-format-artifact-leiningen artifact))
-         (description (cdr (assoc 'description artifact))))
-    (format "%s \t\t\t%s" s description)))
+(defun helm-clojars-search-result-read-results ()
+  ;; vector -> seq
+  (mapcar 'identity (cdar (json-read))))
+
+(defun helm-clojars-trim (s len)
+  (truncate-string-to-width s len 0 ?  " "))
 
 (defun helm-clojars-search-result-parser ()
   (goto-char (+ 1 url-http-end-of-headers))
-  (let* ((data (json-read))
-         (results (cdar data)))
-    (mapcar (lambda (artifact)
-              (cons (helm-clojars-format-artifact-display artifact)
-                    artifact))
-            results)))
+  (let* ((pad (make-string helm-clojars-padding-width ? ))
+         (max-width (or helm-clojars-candidate-width
+                        (window-width (helm-window))
+                        (window-width (selected-window)))))
+    (loop
+     for artifact   in (helm-clojars-search-result-read-results)
+     for group       = (cdr (assoc 'group_name artifact))
+     for jar         = (cdr (assoc 'jar_name artifact))
+     for version     = (cdr (assoc 'version artifact))
+     for description = (cdr (assoc 'description artifact))
+     collect (cons
+              (helm-clojars-trim
+               (concat
+                (helm-clojars-trim group helm-clojars-group-width)
+                pad
+                (helm-clojars-trim jar helm-clojars-jar-width)
+                pad
+                (helm-clojars-trim version helm-clojars-version-width)
+                pad
+                description)
+               max-width)
+              artifact))))
 
 (defun helm-clojars-search-synatx-p (input)
-  (string-match-p "[\\*\\~]" input))
+  (string-match-p "[\\*\\?\\~]" input))
 
 (defun helm-clojars-search-format-input-1 (suffix input)
   (mapconcat
@@ -143,7 +194,7 @@
          (url (format helm-clojars-search-url query)))
     (helm-net--url-retrieve-sync url #'helm-clojars-search-result-parser)))
 
-;; ---------------------------------------------------------------------
+
 ;; * Actions
 
 (defun helm-clojars-kill-artifact (artifact)
@@ -152,11 +203,12 @@
 (defun helm-clojars-insert-artifact (artifact)
   (insert (helm-clojars-format-artifact-leiningen artifact)))
 
-;; ---------------------------------------------------------------------
+
 ;; * Helm source
 
 (defun helm-clojars-search-match-part (candidate)
-  (car (split-string candidate "] ")))
+  (car (split-string candidate "[0-9]")))
+
 
 (defun helm-clojars-search-candidates (&optional request-prefix)
   (helm-clojars-fetch-search
@@ -164,7 +216,7 @@
        helm-pattern)))
 
 (defvar helm-source-clojars
-  (helm-build-sync-source "clojars.org"
+  (helm-build-sync-source "Search clojars.org"
     :candidates #'helm-clojars-search-candidates
     :action helm-clojars-actions
     :volatile t
@@ -172,6 +224,9 @@
     :fuzzy-match helm-clojars-fuzzy-match
     :keymap helm-map
     :requires-pattern helm-clojars-requires-pattern))
+
+
+;; * Interactive commands
 
 ;;;###autoload
 (defun helm-clojars ()
